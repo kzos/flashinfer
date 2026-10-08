@@ -529,6 +529,13 @@ DISPATCH_DTYPE(input_dtype, DTypeIn, {
 
 Defined in `.jinja` files and expanded after rendering.
 
+### Autotuner Cache-Key Shapes
+
+Autotuner ``TuningConfig.cache_key_shape_overrides`` changes only cache identity
+after bucketing, never profiling or launch tensors. The flat routed NVFP4 MoE
+path uses it for the ignored zero-width deferred output; preserve the exclusions
+and zero-allocation contract in ``tests/autotuner/test_moe_deferred_output_cache.py``.
+
 ## API Logging with @flashinfer_api
 
 FlashInfer provides the `@flashinfer_api` decorator for debugging API calls.

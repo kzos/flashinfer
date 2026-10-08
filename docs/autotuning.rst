@@ -37,6 +37,14 @@ all available runners and tactics for that ``(operation, backend, shape)``
 combination.  Subsequent calls with the same shape reuse the cached result
 without re-profiling.
 
+For the flat TRTLLM routed NVFP4 API, standard deferred calls
+(``do_finalize=False, output=None``) use the full-width output's cache key while
+retaining a zero-width output placeholder. This avoids a dummy output allocation.
+The key-only override does not change profiling tensor shapes, runner identity,
+or the unified MoE API's separate finalize-mode keys. Narrow nonzero outputs,
+valid-dimension overrides, LoRA, fused shared experts, and other quantization
+formats retain their existing keys.
+
 You can also pass ``tune_mode=True`` explicitly (the default):
 
 .. code-block:: python

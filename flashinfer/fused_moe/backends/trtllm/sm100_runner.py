@@ -130,6 +130,42 @@ class MoERunner(TunableRunner):
             bool(self.use_per_token_scaling),
         )
 
+    def _deferred_fp4_output_key_overrides(
+        self,
+        moe_inputs: MoeRunnerInputs,
+        *,
+        do_finalize: bool,
+        routing_input_mode: RoutingInputMode,
+        valid_hidden_size: Optional[int] = None,
+        valid_intermediate_size: Optional[int] = None,
+    ) -> tuple[tuple[int, int, int], ...]:
+        output = moe_inputs.output
+        if (
+            do_finalize
+            or routing_input_mode
+            not in (
+                RoutingInputMode.PackedPrecomputed,
+                RoutingInputMode.UnpackedPrecomputed,
+            )
+            or self.dtype_act != DtypeTrtllmGen.E2m1
+            or self.dtype_weights != DtypeTrtllmGen.E2m1
+            or self.fp8_quantization_type != Fp8QuantizationType.NoneFp8
+            or valid_hidden_size is not None
+            or valid_intermediate_size is not None
+            or self.hidden_size_output != self.hidden_size
+            or self.num_fused_shared_experts != 0
+            or moe_inputs.gemm1_lora_delta is not None
+            or output.dtype != torch.bfloat16
+            or output.ndim != 2
+            or output.shape[0] != moe_inputs.hidden_states.shape[0]
+            or output.shape[1] != 0
+        ):
+            return ()
+        # Deferred NVFP4 does not write output, and its GEMM2 N is still H.
+        # Reuse the ordinary full-width key without allocating a dummy [T,H]
+        # buffer or changing the actual zero-width profiling/launch tensor.
+        return ((MoeRunnerInputs.idx("output"), 1, self.hidden_size),)
+
     def _make_tuning_config(
         self,
         moe_inputs: MoeRunnerInputs,

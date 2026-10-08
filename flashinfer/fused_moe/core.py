@@ -3537,6 +3537,13 @@ def _get_trtllm_moe_sm100_module_impl(enable_rubin: bool):
             hidden_states_scale_layout=hidden_states_scale_layout,
             use_cold_l2_cache=True,
             use_cuda_graph=True,
+            cache_key_shape_overrides=moe_runner._deferred_fp4_output_key_overrides(
+                moe_inputs,
+                do_finalize=do_finalize,
+                routing_input_mode=RoutingInputMode(routing_input_mode),
+                valid_hidden_size=valid_hidden_size,
+                valid_intermediate_size=valid_intermediate_size,
+            ),
         )
 
         runner_kwargs = {

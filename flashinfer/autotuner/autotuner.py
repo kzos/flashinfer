@@ -525,6 +525,11 @@ class TuningConfig:
             lane views in the reusable A/B profiling arenas. Their contents are
             staged once per profile even when they are not value-aware. Shared
             read-only tensors may be omitted and retain one pointer.
+        cache_key_shape_overrides: Tuples of (input index, dimension, extent)
+            applied only to cache-key shapes after bucketing. Use only when the
+            overridden extent cannot change tactic legality, such as an ignored
+            output placeholder. Real inputs and profiling allocations retain
+            their original shapes; runner identity and extras are unchanged.
     """
 
     dynamic_tensor_specs: tuple[DynamicTensorSpec, ...] = ()
@@ -544,6 +549,7 @@ class TuningConfig:
     # for inputs whose default tensor_initializer would be random
     # (e.g. token_selected_experts in MoE workloads).
     inputs_pre_hook: Callable | None = None
+    cache_key_shape_overrides: tuple[tuple[int, int, int], ...] = ()
 
 
 class ValueProfileArena:
@@ -2155,6 +2161,7 @@ class AutoTuner:
             use_cold_l2_graph_replay=tuning_config.use_cold_l2_graph_replay,
             value_aware_input_indices=tuning_config.value_aware_input_indices,
             profile_arena_input_indices=tuning_config.profile_arena_input_indices,
+            cache_key_shape_overrides=tuning_config.cache_key_shape_overrides,
             inputs_pre_hook=tuning_config.inputs_pre_hook,
         )
         self._override_config_cache.setdefault(tuning_config, {})[cache_key] = (
@@ -3388,11 +3395,19 @@ class AutoTuner:
         tuning_config: TuningConfig,
         extras: tuple[Any, ...] = (),
     ) -> ProfilingCacheKey:
+        nearest_profile = cls._find_nearest_profile(input_shapes, tuning_config)
+        if tuning_config.cache_key_shape_overrides:
+            key_shapes = list(nearest_profile)
+            for input_idx, dim_idx, extent in tuning_config.cache_key_shape_overrides:
+                shape = list(key_shapes[input_idx])
+                shape[dim_idx] = extent
+                key_shapes[input_idx] = tuple(shape)
+            nearest_profile = tuple(key_shapes)
         return ProfilingCacheKey(
             custom_op=custom_op,
             runner_class_name=runner.__class__.__name__,
             runner_hash=hash(runner),
-            nearest_profile=cls._find_nearest_profile(input_shapes, tuning_config),
+            nearest_profile=nearest_profile,
             extras=extras,
         )
 
